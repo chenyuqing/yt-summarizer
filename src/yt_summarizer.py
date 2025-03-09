@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 
 # Import version information
-from version import __version__ as VERSION
+from src.version import __version__ as VERSION
 
 load_dotenv()
 
@@ -37,14 +37,20 @@ def extract_video_id(url: str) -> str:
         
     raise ValueError("Could not extract YouTube video ID from URL. Please provide a valid YouTube URL.")
 
-def get_transcript(video_id: str) -> str:
+def get_transcript(video_id: str, api_key: str = None) -> str:
     """Fetch YouTube transcript using SearchAPI.io"""
+    # Use provided API key if available, otherwise use environment variable
+    searchapi_key = api_key or os.getenv("SEARCHAPI_KEY")
+    
+    if not searchapi_key:
+        raise ValueError("SearchAPI.io API key is required. Please provide it in the form or set it in the .env file.")
+        
     response = requests.get(
         "https://www.searchapi.io/api/v1/search",
         params={
             "engine": "youtube_transcripts",
             "video_id": video_id,
-            "api_key": os.getenv("SEARCHAPI_KEY")
+            "api_key": searchapi_key
         }
     )
     response.raise_for_status()
@@ -56,27 +62,47 @@ def get_transcript(video_id: str) -> str:
         
     return " ".join([entry["text"] for entry in response_data["transcripts"]])
 
-def summarize_text(text: str) -> str:
+def summarize_text(text: str, api_key: str = None) -> str:
     """Generate summary using Deepseek API"""
+    # Use provided API key if available, otherwise use environment variable
+    deepseek_key = api_key or os.getenv("DEEPSEEK_KEY")
+    
+    if not deepseek_key:
+        raise ValueError("Deepseek API key is required. Please provide it in the form or set it in the .env file.")
+        
     try:
         response = requests.post(
             "https://api.deepseek.com/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {os.getenv('DEEPSEEK_KEY')}",
+                "Authorization": f"Bearer {deepseek_key}",
                 "Content-Type": "application/json"
             },
             json={
                 "model": "deepseek-chat",
                 "messages": [{
                     "role": "user",
-                    "content": f"Convert this transcript into markdown bullet points:\n{text}"
+                    "content": f"Convert this transcript into a numbered list format (1., 2., 3., etc.):\n{text}"
                 }],
                 "temperature": 0.7
             }
         )
         response.raise_for_status()
     except requests.HTTPError as e:
-        print(f"API Error Details: {e.response.text}")  # Show error details
+        error_text = e.response.text
+        print(f"API Error Details: {error_text}")  # Show error details
+        
+        # Parse the error response to extract more specific error messages
+        try:
+            error_json = json.loads(error_text)
+            if "error" in error_json and "message" in error_json["error"]:
+                error_message = error_json["error"]["message"]
+                if "Authentication Fails" in error_message:
+                    raise ValueError(f"Deepseek API authentication failed: {error_message}. Please check your API key.")
+                else:
+                    raise ValueError(f"Deepseek API error: {error_message}")
+        except json.JSONDecodeError:
+            pass
+            
         raise
     return response.json()["choices"][0]["message"]["content"]
 
@@ -107,7 +133,9 @@ def save_to_history(video_id, url, summary):
     with open(HISTORY_FILE, "w") as f:
         json.dump(history, f, indent=2)
 
-app = Flask(__name__)
+# Create Flask app with correct template folder path
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+app = Flask(__name__, template_folder=template_dir)
 
 @app.route('/')
 def index():
@@ -126,17 +154,21 @@ def summarize_video():
         url = request.json.get('url')
         if not url:
             return jsonify({'error': 'Missing YouTube URL'}), 400
+            
+        # Get API keys from request if provided
+        deepseek_key = request.json.get('deepseek_key')
+        searchapi_key = request.json.get('searchapi_key')
         
         # Extract video ID    
         video_id = extract_video_id(url)
         
         # Update progress
         progress_update("Fetching transcript...")
-        transcript = get_transcript(video_id)
+        transcript = get_transcript(video_id, searchapi_key)
         
         # Update progress
         progress_update("Generating summary...")
-        summary = summarize_text(transcript)
+        summary = summarize_text(transcript, deepseek_key)
         
         # Save summary to file
         with open(f"{video_id}_summary.md", "w") as f:
@@ -150,8 +182,17 @@ def summarize_video():
             'video_id': video_id
         })
     except ValueError as e:
+        # This will now catch our more specific API authentication errors
         return jsonify({'error': str(e)}), 400
     except requests.HTTPError as e:
+        # Try to extract more specific error information from the response
+        try:
+            response_json = e.response.json()
+            if 'error' in response_json and 'message' in response_json['error']:
+                error_message = response_json['error']['message']
+                return jsonify({'error': f"API Error: {error_message}"}), 400 if 'authentication' in error_message.lower() else 500
+        except (ValueError, AttributeError, KeyError):
+            pass
         return jsonify({'error': f"API Error: {str(e)}"}), 500
     except Exception as e:
         return jsonify({'error': f"Unexpected error: {str(e)}"}), 500

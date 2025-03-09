@@ -1,6 +1,13 @@
 # Version History
 
-## Version 0.2 (Current)
+## Version 0.3 (Current)
+- Added input fields for Deepseek API key and SearchAPI.io API key
+- Users can now provide API keys directly in the web interface
+- Improved error handling for missing API keys
+- Eliminated dependency on environment variables for API keys
+- Changed summary output format from markdown bullet points to numbered list format
+
+## Version 0.2
 - Added history tracking functionality
 - Implemented progress updates during summarization
 - Added tab interface for summary generation and history viewing

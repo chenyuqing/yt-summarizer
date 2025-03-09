@@ -232,6 +232,11 @@
                 <button id="summarize-button">开始总结</button>
             </div>
             
+            <div class="api-keys-container" style="margin-top: 10px; display: flex; gap: 10px;">
+                <input type="text" id="deepseek-key" placeholder="Deepseek API Key (可选)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="text" id="searchapi-key" placeholder="SearchAPI.io API Key (可选)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+            </div>
+            
             <div id="progress-container" class="progress-container">
                 <div id="progress-message" class="progress-message">准备中...</div>
             </div>
@@ -399,19 +404,34 @@
             // Start checking progress
             checkProgress();
             
+            // Get API keys if provided
+            const deepseekKey = document.getElementById('deepseek-key').value.trim();
+            const searchapiKey = document.getElementById('searchapi-key').value.trim();
+            
             try {
                 const response = await fetch('/summarize', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ url: url })
+                    body: JSON.stringify({ 
+                        url: url,
+                        deepseek_key: deepseekKey,
+                        searchapi_key: searchapiKey
+                    })
                 });
                 
                 const data = await response.json();
                 
                 if (!response.ok) {
-                    throw new Error(data.error || `请求失败: ${response.status}`);
+                    // Handle specific API key errors with more helpful messages
+                    if (data.error && data.error.includes('API authentication failed')) {
+                        throw new Error(`${data.error} 请确保您输入了正确的API密钥。`);
+                    } else if (data.error && data.error.includes('API key')) {
+                        throw new Error(`${data.error} 请检查您的API密钥是否有效。`);
+                    } else {
+                        throw new Error(data.error || `请求失败: ${response.status}`);
+                    }
                 }
                 
                 // 显示纯文本结果
@@ -422,6 +442,14 @@
             } catch (error) {
                 placeholder.style.display = 'block';
                 placeholder.innerHTML = `<span style="color: #dc3545">${error.message || '请求处理失败，请检查网络连接'}</span>`;
+                
+                // Add more helpful guidance for API key errors
+                if (error.message && (error.message.includes('API key') || error.message.includes('authentication'))) {
+                    placeholder.innerHTML += `<p style="color: #856404; background-color: #fff3cd; padding: 10px; margin-top: 10px; border-radius: 4px;">
+                        <strong>提示:</strong> 请确保您已正确输入 Deepseek API 密钥和 SearchAPI.io API 密钥。<br>
+                        如果您没有这些密钥，请访问相应网站注册获取。
+                    </p>`;
+                }
             } finally {
                 loading.style.display = 'none';
                 progressContainer.style.display = 'none';

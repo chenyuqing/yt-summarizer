@@ -1,6 +1,10 @@
 import requests
 import time
 import sys
+import os
+
+# Add parent directory to path to allow running from src directory
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 url = 'http://127.0.0.1:5001/summarize'
 headers = {'Content-Type': 'application/json'}
