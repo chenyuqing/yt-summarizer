@@ -40,3 +40,6 @@ Thumbs.db
 
 # Project specific
 summary_history.json
+
+# summary markdown file
+*_summary.md
