@@ -83,6 +83,10 @@ def handler(request, context):
     # Convert headers to a dictionary
     headers_dict = {k: v for k, v in response_headers}
     
+    # Ensure API endpoints always return JSON content type
+    if path != '/' and 'Content-Type' not in headers_dict:
+        headers_dict['Content-Type'] = 'application/json'
+    
     # Return the response in the format Vercel expects
     return {
         'statusCode': status_code,
