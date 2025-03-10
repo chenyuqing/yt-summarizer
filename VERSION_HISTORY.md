@@ -1,6 +1,15 @@
 # Version History
 
-## Version 0.3 (Current)
+## Version 0.4 (Current)
+- Added rate limiting to prevent API abuse
+- Implemented proper error logging with rotation
+- Added monitoring capabilities
+- Created output directory for organized summary storage
+- Enhanced security features
+- Added deployment documentation for production
+- Added Vercel deployment support with serverless configuration
+
+## Version 0.3
 - Added input fields for Deepseek API key and SearchAPI.io API key
 - Users can now provide API keys directly in the web interface
 - Improved error handling for missing API keys

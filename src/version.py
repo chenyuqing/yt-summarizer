@@ -1,10 +1,10 @@
 # Version information for the YouTube Summarizer application
 
-__version__ = "0.3"
-__version_info__ = (0, 3, 0)
+__version__ = "0.4"
+__version_info__ = (0, 4, 0)
 
 # Version release date
-__release_date__ = "2023-11-15"
+__release_date__ = "2023-11-16"
 
 # Version description
-__description__ = "Added API key input fields for direct user input without environment variables and changed summary output format from markdown bullet points to numbered list format"
+__description__ = "Deployed application to production with enhanced security features including rate limiting, proper error logging, and monitoring. Added deployment documentation for maintenance."
