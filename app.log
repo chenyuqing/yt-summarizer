@@ -1,0 +1,4 @@
+2025-03-10 10:09:39.143 | INFO     | src.yt_summarizer:summarize_video:229 - Processing video ID: KrRD7r7y7NY from IP: 127.0.0.1
+2025-03-10 10:10:36.259 | INFO     | src.yt_summarizer:summarize_video:279 - Successfully generated summary for video ID: KrRD7r7y7NY
+2025-03-10 11:21:00.768 | INFO     | src.yt_summarizer:summarize_video:253 - Processing video ID: NWi9TBzknuw from IP: 127.0.0.1
+2025-03-10 11:21:44.665 | INFO     | src.yt_summarizer:summarize_video:303 - Successfully generated summary for video ID: NWi9TBzknuw

@@ -12,7 +12,11 @@ from flask_limiter.util import get_remote_address
 from loguru import logger
 
 # Import version information
-from src.version import __version__ as VERSION
+try:
+    from src.version import __version__ as VERSION
+except ImportError:
+    # Fallback for Vercel environment
+    VERSION = "0.4"
 
 load_dotenv()
 
@@ -120,6 +124,25 @@ def summarize_text(text: str, api_key: str = None) -> str:
         raise
     return response.json()["choices"][0]["message"]["content"]
 
+def ensure_directory_exists(path):
+    """Ensure a directory exists, handling edge cases for serverless environments"""
+    try:
+        # Handle case where path is a file path by getting the directory
+        directory = path if os.path.splitext(path)[1] == '' else os.path.dirname(path)
+        
+        # If directory is empty string, use current directory
+        if not directory:
+            directory = '.'
+            
+        # Create directory if it doesn't exist
+        if not os.path.exists(directory):
+            os.makedirs(directory, exist_ok=True)
+            
+        return True
+    except Exception as e:
+        logger.error(f"Failed to create directory {path}: {str(e)}")
+        return False
+
 def load_history():
     """Load summary history from file"""
     try:
@@ -145,8 +168,10 @@ def save_to_history(video_id, url, summary):
         
         # Add to history and save
         history.append(entry)
-        # Create directory if it doesn't exist (for /tmp in serverless)
-        os.makedirs(os.path.dirname(HISTORY_FILE) if os.path.dirname(HISTORY_FILE) else '.', exist_ok=True)
+        
+        # Ensure directory exists before writing file
+        ensure_directory_exists(os.path.dirname(HISTORY_FILE) or '.')
+        
         with open(HISTORY_FILE, "w") as f:
             json.dump(history, f, indent=2)
     except Exception as e:
@@ -154,15 +179,30 @@ def save_to_history(video_id, url, summary):
         # Continue execution even if history save fails
 
 # Create Flask app with correct template folder path
-template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
-app = Flask(__name__, template_folder=template_dir)
+try:
+    template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+    app = Flask(__name__, template_folder=template_dir)
+except Exception as e:
+    # Fallback for Vercel environment
+    app = Flask(__name__, template_folder='templates')
+    logger.error(f"Error setting template directory: {str(e)}")
 
-# Configure rate limiting
-limiter = Limiter(
-    app,
-    key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"]
-)
+# Configure rate limiting with in-memory storage for Vercel compatibility
+try:
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://"
+    )
+except Exception as e:
+    # Fallback with minimal configuration
+    limiter = Limiter(
+        key_func=get_remote_address,
+        app=app,
+        default_limits=["200 per day", "50 per hour"]
+    )
+    logger.error(f"Error configuring rate limiter: {str(e)}")
 
 @app.route('/')
 def index():
@@ -180,8 +220,9 @@ def update_progress_status(message):
     """Update progress status file"""
     progress_file = "/tmp/progress_status.json" if os.environ.get('VERCEL_ENV') else "progress_status.json"
     try:
-        # Create directory if it doesn't exist (for /tmp in serverless)
-        os.makedirs(os.path.dirname(progress_file) if os.path.dirname(progress_file) else '.', exist_ok=True)
+        # Ensure directory exists before writing file
+        ensure_directory_exists(os.path.dirname(progress_file) or '.')
+        
         with open(progress_file, "w") as f:
             json.dump({"message": message, "timestamp": datetime.now().isoformat()}, f)
         return True
@@ -193,6 +234,11 @@ def update_progress_status(message):
 @limiter.limit("5 per minute")
 def summarize_video():
     try:
+        # Check if request has JSON data
+        if not request.is_json:
+            logger.warning(f"Invalid request format from {request.remote_addr}")
+            return jsonify({'error': 'Invalid request format. JSON required'}), 400
+            
         url = request.json.get('url')
         if not url:
             logger.warning(f"Missing YouTube URL in request from {request.remote_addr}")
@@ -237,8 +283,9 @@ def summarize_video():
         # Save summary to file
         output_dir = "/tmp/output" if os.environ.get('VERCEL_ENV') else "output"
         try:
-            # Ensure the output directory exists
-            os.makedirs(output_dir, exist_ok=True)
+            # Ensure the output directory exists using our helper function
+            ensure_directory_exists(output_dir)
+            
             summary_path = os.path.join(output_dir, f"{video_id}_summary.md")
             with open(summary_path, "w") as f:
                 f.write(summary)
@@ -314,6 +361,7 @@ def not_found(error):
 
 @app.errorhandler(500)
 def internal_error(error):
+    logger.exception("Internal server error")
     return jsonify({'error': 'Internal server error'}), 500
 
 def main():
@@ -328,13 +376,18 @@ def main():
         print("Generating summary...")
         summary = summarize_text(transcript)
         
-        with open(f"{video_id}_summary.md", "w") as f:
+        # Ensure output directory exists
+        output_dir = "output"
+        ensure_directory_exists(output_dir)
+        summary_path = os.path.join(output_dir, f"{video_id}_summary.md")
+        
+        with open(summary_path, "w") as f:
             f.write(summary)
         
         # Save to history
         save_to_history(video_id, f"https://youtube.com/watch?v={video_id}", summary)
             
-        print(f"Summary saved to {video_id}_summary.md")
+        print(f"Summary saved to {summary_path}")
         print("="*50)
         print(summary)
         
