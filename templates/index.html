@@ -233,8 +233,8 @@
             </div>
             
             <div class="api-keys-container" style="margin-top: 10px; display: flex; gap: 10px;">
-                <input type="text" id="deepseek-key" placeholder="Deepseek API Key (可选)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <input type="text" id="searchapi-key" placeholder="SearchAPI.io API Key (可选)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="text" id="deepseek-key" placeholder="Deepseek API Key (必选)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="text" id="searchapi-key" placeholder="SearchAPI.io API Key (必选)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
             </div>
             
             <div id="progress-container" class="progress-container">
@@ -420,6 +420,14 @@
                         searchapi_key: searchapiKey
                     })
                 });
+                
+                // Check if the response is JSON before trying to parse it
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    // If not JSON, get the text and throw an error
+                    const text = await response.text();
+                    throw new Error('服务器返回了非JSON格式的响应，可能是服务器错误。请稍后再试。');
+                }
                 
                 const data = await response.json();
                 

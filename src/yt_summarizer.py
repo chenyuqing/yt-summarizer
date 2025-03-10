@@ -13,10 +13,15 @@ from loguru import logger
 
 # Import version information
 try:
+    # Try importing directly (when running from project root)
     from src.version import __version__ as VERSION
 except ImportError:
-    # Fallback for Vercel environment
-    VERSION = "0.4"
+    try:
+        # Try importing relatively (when running from within src directory)
+        from version import __version__ as VERSION
+    except ImportError:
+        # Fallback for Vercel environment
+        VERSION = "0.4"
 
 load_dotenv()
 
@@ -348,8 +353,12 @@ def get_history():
 
 # 添加全局JSON响应处理
 def add_cors_headers(response):
+    # Always set Content-Type to application/json for API endpoints
+    # Skip for the main page which should return HTML
     if request.path == '/':
         return response
+    
+    # Ensure all API responses have the correct Content-Type
     response.headers['Content-Type'] = 'application/json'
     return response
 
@@ -363,6 +372,12 @@ def not_found(error):
 def internal_error(error):
     logger.exception("Internal server error")
     return jsonify({'error': 'Internal server error'}), 500
+
+# Add a catch-all exception handler to ensure JSON responses
+@app.errorhandler(Exception)
+def handle_exception(error):
+    logger.exception(f"Unhandled exception: {str(error)}")
+    return jsonify({'error': f'Server error: {str(error)}'}), 500
 
 def main():
     try:
